@@ -1,0 +1,91 @@
+import time
+import datetime
+import requests
+from bs4 import BeautifulSoup
+
+# URL новостного агентства
+news_url = "https://www.bbc.com/news/world"
+
+# Интервал проверки (в секундах)
+check_interval = 14400  # 4 часа
+
+# Название файла лога
+log_file = "news_log.txt"
+
+# Список партий для поиска
+parties = ["Republican Party", "Democratic Party"]
+
+def get_news():
+    """
+    Функция для получения новостей с веб-страницы.
+    """
+    try:
+        response = requests.get(news_url)
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"Ошибка при запросе страницы: {e}")
+        return []
+
+    soup = BeautifulSoup(response.content, 'html.parser')
+    news_articles = []
+
+    for article in soup.find_all('article'):
+        title_tag = article.find('h3')
+        summary_tag = article.find('p', class_='summary')
+        authors_tags = article.find_all('span', class_='author')
+
+        if title_tag and summary_tag:
+            title = title_tag.text.strip()
+            summary = summary_tag.text.strip()
+            authors = [author.text.strip() for author in authors_tags]
+
+            if any(party in title or party in summary for party in parties):
+                news_articles.append({
+                    'title': title,
+                    'summary': summary,
+                    'authors': authors,
+                })
+
+    return news_articles
+
+def save_news_to_log(news_articles):
+    """
+    Функция для сохранения новостей в лог-файл.
+    """
+    with open(log_file, 'a', encoding='utf-8') as f:
+        for article in news_articles:
+            f.write(f"\n\n**Заголовок:** {article['title']}\n")
+            f.write(f"**Аннотация:** {article['summary']}\n")
+            f.write(f"**Авторы:** {', '.join(article['authors'])}\n")
+            f.write(f"-----------------------------------------------------\n")
+
+def main():
+    """
+    Главная функция.
+    """
+    last_news_titles = set()
+
+    try:
+        while True:
+            current_time = datetime.datetime.now()
+            print(f"Проверка новостей на {current_time}")
+
+            news_articles = get_news()
+            new_news_articles = []
+
+            for article in news_articles:
+                if article['title'] not in last_news_titles:
+                    new_news_articles.append(article)
+                    last_news_titles.add(article['title'])
+
+            if new_news_articles:
+                print(f"Найдены новые новости ({len(new_news_articles)}):")
+                save_news_to_log(new_news_articles)
+
+            time.sleep(check_interval)
+
+    except KeyboardInterrupt:
+        print("Программа остановлена пользователем.")
+
+if __name__ == "__main__":
+    main()
